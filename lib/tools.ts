@@ -396,3 +396,133 @@ export async function listCanonicalSectors(): Promise<
     return { error: `Failed to list canonical sectors: ${errorMessage}` };
   }
 }
+
+export interface SectorSummary {
+  sector: string;
+  count: number;
+  value: number;
+}
+
+export interface FlagHighlight {
+  flag: string;
+  count: number;
+}
+
+export interface LeadershipUpdateResult {
+  totalOpenPipelineValue: number;
+  totalOpenDealCount: number;
+  topSectorsByValue: SectorSummary[];
+  totalRevenueCollected: number;
+  totalReceivable: number;
+  dataQualityHighlights: FlagHighlight[];
+  caveats: string[];
+}
+
+export async function generateLeadershipUpdate(
+  focusArea?: string
+): Promise<LeadershipUpdateResult | { error: string }> {
+  try {
+    const rawDeals = await getCleanDeals();
+    const rawWorkOrders = await getCleanWorkOrders();
+    const caveats: string[] = [];
+
+    let deals = rawDeals.filter(d => d.dealStatus?.toLowerCase() === "open");
+    let workOrders = rawWorkOrders;
+
+    if (focusArea) {
+      const targetSector = focusArea.trim().toLowerCase();
+      deals = deals.filter(d => d.sector?.toLowerCase() === targetSector);
+      workOrders = workOrders.filter(w => w.sector?.toLowerCase() === targetSector);
+      caveats.push(`Leadership update is scoped specifically to the focus area sector: "${focusArea}".`);
+    }
+
+    // Calculations
+    let totalOpenPipelineValue = 0;
+    let excludedDealsValue = 0;
+    const sectorAggs: Record<string, { count: number; value: number }> = {};
+    const flagCounts: Record<string, number> = {};
+
+    for (const d of deals) {
+      if (d.dealValue === null) {
+        excludedDealsValue++;
+      } else {
+        totalOpenPipelineValue += d.dealValue;
+      }
+
+      const sector = d.sector || "Unknown";
+      if (!sectorAggs[sector]) {
+        sectorAggs[sector] = { count: 0, value: 0 };
+      }
+      sectorAggs[sector].count++;
+      if (d.dealValue !== null) {
+        sectorAggs[sector].value += d.dealValue;
+      }
+
+      for (const flag of d.dataQualityFlags) {
+        flagCounts[flag] = (flagCounts[flag] || 0) + 1;
+      }
+    }
+
+    if (excludedDealsValue > 0) {
+      caveats.push(`Excluded ${excludedDealsValue} deals from pipeline value sum due to missing dealValue.`);
+    }
+
+    const topSectorsByValue: SectorSummary[] = Object.entries(sectorAggs)
+      .map(([sector, agg]) => ({
+        sector,
+        count: agg.count,
+        value: agg.value,
+      }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 3);
+
+    // Revenue calculations
+    let totalRevenueCollected = 0;
+    let totalReceivable = 0;
+    let excludedCollected = 0;
+    let excludedReceivable = 0;
+
+    for (const w of workOrders) {
+      if (w.collectedAmountInclGst === null) {
+        excludedCollected++;
+      } else {
+        totalRevenueCollected += w.collectedAmountInclGst;
+      }
+
+      if (w.amountReceivable === null) {
+        excludedReceivable++;
+      } else {
+        totalReceivable += w.amountReceivable;
+      }
+
+      for (const flag of w.dataQualityFlags) {
+        flagCounts[flag] = (flagCounts[flag] || 0) + 1;
+      }
+    }
+
+    if (excludedCollected > 0) {
+      caveats.push(`Excluded ${excludedCollected} work orders from revenue collected sum due to missing collectedAmountInclGst.`);
+    }
+    if (excludedReceivable > 0) {
+      caveats.push(`Excluded ${excludedReceivable} work orders from amount receivable sum due to missing amountReceivable.`);
+    }
+
+    const dataQualityHighlights: FlagHighlight[] = Object.entries(flagCounts)
+      .map(([flag, count]) => ({ flag, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3);
+
+    return {
+      totalOpenPipelineValue,
+      totalOpenDealCount: deals.length,
+      topSectorsByValue,
+      totalRevenueCollected,
+      totalReceivable,
+      dataQualityHighlights,
+      caveats,
+    };
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    return { error: `Failed to generate leadership update: ${errorMessage}` };
+  }
+}

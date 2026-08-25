@@ -13,6 +13,7 @@ import {
   getWorkOrderStatus,
   getDataQualitySummary,
   listCanonicalSectors,
+  generateLeadershipUpdate,
 } from "./tools";
 
 const systemInstruction = `You are a founder-facing business intelligence assistant for Skylark Drones, operating over live monday.com Deals and Work Order data.
@@ -22,7 +23,11 @@ Follow these strict operating rules:
 2. Transparency & Quality flags: Always surface any caveats or dataQualityFlags returned by the tools in your final answer. Do not omit them or hide data gaps from the user.
 3. Ambiguity handling: If a query is genuinely ambiguous (e.g., "this quarter" without specifying calendar vs. fiscal quarter, or "pipeline" without clarifying if Closed-Won or other non-open deals should be included), ask a clarifying question instead of guessing.
 4. Accuracy: Never fabricate numbers, statistics, or calculations not returned by a tool call. Report exactly what the tool outputs.
-5. Tone: Professional, direct, and founder-focused. Keep explanations clear, and highlight key metrics and potential data quality concerns.`;
+5. Tone: Professional, direct, and founder-focused. Keep explanations clear, and highlight key metrics and potential data quality concerns.
+6. Leadership Update: If the user asks for a "leadership update," "executive summary," or similar summary of overall health, call generateLeadershipUpdate (optionally passing focusArea if they specify a sector). After calling this tool, write a well-formatted markdown summary containing:
+   - A clear, professional headline.
+   - 3-5 high-level business insights interpreting the data (e.g., concentration risks, collection gaps, or pipeline distribution; do not just list numbers, offer actual interpretation like "pipeline is heavily concentrated in Railways and Tender deals, which is a concentration risk").
+   - An explicit "Data Quality Notes" section listing all caveats and flags returned by the tool.`;
 
 const getPipelineBySectorDeclaration: FunctionDeclaration = {
   name: "getPipelineBySector",
@@ -98,6 +103,21 @@ const listCanonicalSectorsDeclaration: FunctionDeclaration = {
   parameters: {
     type: SchemaType.OBJECT,
     properties: {},
+  },
+};
+
+const generateLeadershipUpdateDeclaration: FunctionDeclaration = {
+  name: "generateLeadershipUpdate",
+  description:
+    "Generates a high-level executive leadership update including overall pipeline value, top sectors, collected revenue, receivables, and data quality highlights.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      focusArea: {
+        type: SchemaType.STRING,
+        description: "The optional sector name to restrict the leadership update to.",
+      },
+    },
   },
 };
 
@@ -197,6 +217,7 @@ export async function runAgent(
         getWorkOrderStatusDeclaration,
         getDataQualitySummaryDeclaration,
         listCanonicalSectorsDeclaration,
+        generateLeadershipUpdateDeclaration,
       ],
     },
   ];
@@ -245,6 +266,9 @@ export async function runAgent(
           functionResult = await getDataQualitySummary();
         } else if (name === "listCanonicalSectors") {
           functionResult = await listCanonicalSectors();
+        } else if (name === "generateLeadershipUpdate") {
+          const typedArgs = args as { focusArea?: string };
+          functionResult = await generateLeadershipUpdate(typedArgs.focusArea);
         } else {
           functionResult = { error: `Tool ${name} not found.` };
         }

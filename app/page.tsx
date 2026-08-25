@@ -7,6 +7,7 @@ import remarkGfm from "remark-gfm";
 interface Message {
   role: "user" | "model";
   text: string;
+  toolCalls?: { name: string; args: unknown }[];
 }
 
 const exampleQuestions = [
@@ -38,6 +39,7 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -49,6 +51,12 @@ export default function Home() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, loading]);
+
+  const handleCopy = (text: string, index: number) => {
+    navigator.clipboard.writeText(text);
+    setCopiedIndex(index);
+    setTimeout(() => setCopiedIndex(null), 2000);
+  };
 
   const submitMessage = async (messageText: string) => {
     if (!messageText.trim() || loading) return;
@@ -87,7 +95,7 @@ export default function Home() {
 
       setMessages((prev) => [
         ...prev,
-        { role: "model" as const, text: data.reply },
+        { role: "model" as const, text: data.reply, toolCalls: data.toolCalls },
       ]);
     } catch (err: unknown) {
       console.error("Chat request failed:", err);
@@ -156,6 +164,10 @@ export default function Home() {
             <div className="space-y-6">
               {messages.map((m, idx) => {
                 const isUser = m.role === "user";
+                const isLeadershipUpdate = m.toolCalls?.some(
+                  (call) => call.name === "generateLeadershipUpdate"
+                );
+
                 return (
                   <div
                     key={idx}
@@ -289,6 +301,18 @@ export default function Home() {
                           {m.text}
                         </ReactMarkdown>
                       </div>
+
+                      {/* Copy Leadership Update Button */}
+                      {isLeadershipUpdate && (
+                        <div className="mt-3 flex justify-end">
+                          <button
+                            onClick={() => handleCopy(m.text, idx)}
+                            className="font-mono text-[10px] uppercase font-bold tracking-wider text-cyan-400 hover:text-cyan-300 border border-cyan-500/20 hover:border-cyan-500 bg-cyan-950/30 px-2.5 py-1 rounded transition-colors focus:outline-none"
+                          >
+                            {copiedIndex === idx ? "✓ Copied!" : "Copy Update"}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -338,6 +362,22 @@ export default function Home() {
       {/* Input / Control Area */}
       <footer className="flex-shrink-0 border-t border-zinc-800 bg-zinc-900/30 backdrop-blur px-4 py-4 sm:px-6 md:px-8">
         <div className="max-w-3xl mx-auto">
+          {/* Quick Action Buttons Row */}
+          <div className="flex justify-start mb-3">
+            <button
+              type="button"
+              onClick={() =>
+                submitMessage(
+                  "Prepare a leadership update on overall pipeline and revenue health"
+                )
+              }
+              disabled={loading}
+              className="font-mono text-xs font-bold uppercase tracking-wider text-amber-500 hover:text-amber-400 border border-amber-500/20 hover:border-amber-500 bg-amber-500/5 hover:bg-amber-500/10 px-3.5 py-1.5 rounded-lg transition-all focus:outline-none focus:ring-1 focus:ring-amber-500/50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+            >
+              ⚡ LEADERSHIP UPDATE
+            </button>
+          </div>
+
           <form onSubmit={handleSend} className="relative flex items-center">
             <input
               type="text"
