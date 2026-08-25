@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
 
-    // Detect rate limit error signatures
+    // 1. Detect AI rate limit / quota issues
     const isRateLimit =
       errorMessage.includes("429") ||
       errorMessage.includes("RESOURCE_EXHAUSTED") ||
@@ -34,18 +34,37 @@ export async function POST(request: Request) {
     if (isRateLimit) {
       return NextResponse.json(
         {
-          error:
-            "Gemini API rate limit exceeded (Quota / Resource Exhausted). Please wait a moment before trying again.",
+          error: "the AI service is busy, please wait a moment and try again",
           code: "RATE_LIMIT",
         },
         { status: 429 }
       );
     }
 
+    // 2. Detect Monday.com connectivity / authentication issues
+    const isMondayError =
+      errorMessage.toLowerCase().includes("monday.com data unavailable") ||
+      errorMessage.toLowerCase().includes("monday.com api") ||
+      errorMessage.toLowerCase().includes("unreachable") ||
+      errorMessage.toLowerCase().includes("invalid token") ||
+      errorMessage.toLowerCase().includes("board id") ||
+      errorMessage.toLowerCase().includes("board not found");
+
+    if (isMondayError) {
+      return NextResponse.json(
+        {
+          error: "live business data is temporarily unavailable",
+          code: "MONDAY_UNAVAILABLE",
+        },
+        { status: 503 }
+      );
+    }
+
+    // 3. Fallback for any other unexpected failures - hide internal logs / traces
     return NextResponse.json(
       {
-        error: `Agent processing failed: ${errorMessage}`,
-        code: "AGENT_FAILURE",
+        error: "something went wrong, please try again",
+        code: "UNKNOWN_FAILURE",
       },
       { status: 500 }
     );

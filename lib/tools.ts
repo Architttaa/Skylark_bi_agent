@@ -1,4 +1,36 @@
-import { getCleanDeals, getCleanWorkOrders } from "./normalize";
+import { getCleanDeals, getCleanWorkOrders, NormalizedDeal, NormalizedWorkOrder } from "./normalize";
+
+// Startup environment checks
+const requiredEnvVars = [
+  "MONDAY_API_TOKEN",
+  "MONDAY_DEALS_BOARD_ID",
+  "MONDAY_WORK_ORDERS_BOARD_ID",
+  "GEMINI_API_KEY",
+];
+for (const key of requiredEnvVars) {
+  if (!process.env[key]) {
+    console.warn(`[WARNING] Missing required environment variable: ${key}`);
+  }
+}
+
+// Safety wrappers to intercept Monday API errors and return uniform messages
+async function fetchDealsSafely(): Promise<NormalizedDeal[]> {
+  try {
+    return await getCleanDeals();
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    throw new Error(`monday.com data unavailable: ${msg}`);
+  }
+}
+
+async function fetchWorkOrdersSafely(): Promise<NormalizedWorkOrder[]> {
+  try {
+    return await getCleanWorkOrders();
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    throw new Error(`monday.com data unavailable: ${msg}`);
+  }
+}
 
 export interface StageBreakdownEntry {
   count: number;
@@ -24,7 +56,7 @@ export async function getPipelineBySector(
   | { error: string }
 > {
   try {
-    const deals = await getCleanDeals();
+    const deals = await fetchDealsSafely();
     const caveats: string[] = [];
 
     caveats.push(
@@ -136,6 +168,9 @@ export async function getPipelineBySector(
   } catch (error: unknown) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
+    if (errorMessage.startsWith("monday.com data unavailable:")) {
+      return { error: errorMessage };
+    }
     return { error: `Failed to calculate pipeline summary: ${errorMessage}` };
   }
 }
@@ -153,7 +188,7 @@ export async function getRevenueSummary(
   | { error: string }
 > {
   try {
-    const workOrders = await getCleanWorkOrders();
+    const workOrders = await fetchWorkOrdersSafely();
     let filtered = workOrders;
 
     if (period) {
@@ -220,6 +255,9 @@ export async function getRevenueSummary(
   } catch (error: unknown) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
+    if (errorMessage.startsWith("monday.com data unavailable:")) {
+      return { error: errorMessage };
+    }
     return { error: `Failed to calculate revenue summary: ${errorMessage}` };
   }
 }
@@ -250,7 +288,7 @@ export async function getWorkOrderStatus(
   | { error: string }
 > {
   try {
-    const workOrders = await getCleanWorkOrders();
+    const workOrders = await fetchWorkOrdersSafely();
     let filtered = workOrders;
 
     if (sector) {
@@ -310,6 +348,9 @@ export async function getWorkOrderStatus(
   } catch (error: unknown) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
+    if (errorMessage.startsWith("monday.com data unavailable:")) {
+      return { error: errorMessage };
+    }
     return { error: `Failed to retrieve work order status: ${errorMessage}` };
   }
 }
@@ -328,8 +369,8 @@ export async function getDataQualitySummary(): Promise<
   | { error: string }
 > {
   try {
-    const deals = await getCleanDeals();
-    const workOrders = await getCleanWorkOrders();
+    const deals = await fetchDealsSafely();
+    const workOrders = await fetchWorkOrdersSafely();
 
     const dealFlagsSummary: Record<string, number> = {};
     const workOrderFlagsSummary: Record<string, number> = {};
@@ -359,6 +400,9 @@ export async function getDataQualitySummary(): Promise<
   } catch (error: unknown) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
+    if (errorMessage.startsWith("monday.com data unavailable:")) {
+      return { error: errorMessage };
+    }
     return { error: `Failed to retrieve data quality summary: ${errorMessage}` };
   }
 }
@@ -370,8 +414,8 @@ export async function listCanonicalSectors(): Promise<
   | { error: string }
 > {
   try {
-    const deals = await getCleanDeals();
-    const workOrders = await getCleanWorkOrders();
+    const deals = await fetchDealsSafely();
+    const workOrders = await fetchWorkOrdersSafely();
 
     const sectors = new Set<string>();
 
@@ -393,6 +437,9 @@ export async function listCanonicalSectors(): Promise<
   } catch (error: unknown) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
+    if (errorMessage.startsWith("monday.com data unavailable:")) {
+      return { error: errorMessage };
+    }
     return { error: `Failed to list canonical sectors: ${errorMessage}` };
   }
 }
@@ -422,8 +469,8 @@ export async function generateLeadershipUpdate(
   focusArea?: string
 ): Promise<LeadershipUpdateResult | { error: string }> {
   try {
-    const rawDeals = await getCleanDeals();
-    const rawWorkOrders = await getCleanWorkOrders();
+    const rawDeals = await fetchDealsSafely();
+    const rawWorkOrders = await fetchWorkOrdersSafely();
     const caveats: string[] = [];
 
     let deals = rawDeals.filter(d => d.dealStatus?.toLowerCase() === "open");
@@ -523,6 +570,9 @@ export async function generateLeadershipUpdate(
     };
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    if (errorMessage.startsWith("monday.com data unavailable:")) {
+      return { error: errorMessage };
+    }
     return { error: `Failed to generate leadership update: ${errorMessage}` };
   }
 }

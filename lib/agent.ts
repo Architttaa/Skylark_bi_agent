@@ -16,6 +16,19 @@ import {
   generateLeadershipUpdate,
 } from "./tools";
 
+// Startup environment checks
+const requiredEnvVars = [
+  "MONDAY_API_TOKEN",
+  "MONDAY_DEALS_BOARD_ID",
+  "MONDAY_WORK_ORDERS_BOARD_ID",
+  "GEMINI_API_KEY",
+];
+for (const key of requiredEnvVars) {
+  if (!process.env[key]) {
+    console.warn(`[WARNING] Missing required environment variable: ${key}`);
+  }
+}
+
 const systemInstruction = `You are a founder-facing business intelligence assistant for Skylark Drones, operating over live monday.com Deals and Work Order data.
 
 Follow these strict operating rules:
