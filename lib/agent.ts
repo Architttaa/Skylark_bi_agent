@@ -40,7 +40,8 @@ Follow these strict operating rules:
 6. Leadership Update: If the user asks for a "leadership update," "executive summary," or similar summary of overall health, call generateLeadershipUpdate (optionally passing focusArea if they specify a sector). After calling this tool, write a well-formatted markdown summary containing:
    - A clear, professional headline.
    - 3-5 high-level business insights interpreting the data (e.g., concentration risks, collection gaps, or pipeline distribution; do not just list numbers, offer actual interpretation like "pipeline is heavily concentrated in Railways and Tender deals, which is a concentration risk").
-   - An explicit "Data Quality Notes" section listing all caveats and flags returned by the tool.`;
+   - An explicit "Data Quality Notes" section listing all caveats and flags returned by the tool.
+7. Error Handling: If any tool returns an error indicating that monday.com data is unavailable, tell the user plainly that live business data couldn't be fetched right now, rather than fabricating any numbers or statistics. Do not expose internal technical messages or stack traces.`;
 
 const getPipelineBySectorDeclaration: FunctionDeclaration = {
   name: "getPipelineBySector",
